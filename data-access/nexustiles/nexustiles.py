@@ -27,10 +27,17 @@ import dao.DynamoProxy
 import dao.SolrProxy
 from pytz import timezone, UTC
 from shapely.geometry import MultiPolygon, box
+import logging
 
 from model.nexusmodel import Tile, BBox, TileStats
 
 EPOCH = timezone('UTC').localize(datetime(1970, 1, 1))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt="%Y-%m-%dT%H:%M:%S", stream=sys.stdout)
+logger = logging.getLogger("testing")
 
 
 def tile_data(default_fetch=True):
@@ -38,16 +45,25 @@ def tile_data(default_fetch=True):
         @wraps(func)
         def fetch_data_for_func(*args, **kwargs):
             if ('fetch_data' not in kwargs and not default_fetch) or (
-                            'fetch_data' in kwargs and not kwargs['fetch_data']):
+                    'fetch_data' in kwargs and not kwargs['fetch_data']):
                 solr_docs = func(*args, **kwargs)
                 tiles = args[0]._solr_docs_to_tiles(*solr_docs)
                 return tiles
             else:
+                solr_start = datetime.now()
                 solr_docs = func(*args, **kwargs)
+                solr_duration = datetime.now() - solr_start
                 tiles = args[0]._solr_docs_to_tiles(*solr_docs)
                 if len(tiles) > 0:
+                    cassandra_start = datetime.now()
                     args[0].fetch_data_for_tiles(*tiles)
-                return tiles
+                    cassandra_duration = datetime.now() - cassandra_start
+                else:
+                    now = datetime.now()
+                    cassandra_duration = now - now
+                return tiles, {"cassandra": cassandra_duration,
+                               "solr": solr_duration,
+                               "num_tiles": len(tiles)}
 
         return fetch_data_for_func
 
@@ -99,8 +115,9 @@ class NexusTileService(object):
         return self._metadatastore.find_tiles_by_id(tile_ids, ds=ds, **kwargs)
 
     def find_days_in_range_asc(self, min_lat, max_lat, min_lon, max_lon, dataset, start_time, end_time, **kwargs):
-        return self._metadatastore.find_days_in_range_asc(min_lat, max_lat, min_lon, max_lon, dataset, start_time, end_time,
-                                                 **kwargs)
+        return self._metadatastore.find_days_in_range_asc(min_lat, max_lat, min_lon, max_lon, dataset, start_time,
+                                                          end_time,
+                                                          **kwargs)
 
     @tile_data()
     def find_tile_by_polygon_and_most_recent_day_of_year(self, bounding_polygon, ds, day_of_year, **kwargs):
@@ -127,7 +144,8 @@ class NexusTileService(object):
         :return: List of one tile from ds with bounding_polygon on or before day_of_year or raise NexusTileServiceException if no tile found
         """
         try:
-            tile = self._metadatastore.find_tile_by_polygon_and_most_recent_day_of_year(bounding_polygon, ds, day_of_year)
+            tile = self._metadatastore.find_tile_by_polygon_and_most_recent_day_of_year(bounding_polygon, ds,
+                                                                                        day_of_year)
         except IndexError:
             raise NexusTileServiceException("No tile found."), None, sys.exc_info()[2]
 
@@ -135,8 +153,9 @@ class NexusTileService(object):
 
     @tile_data()
     def find_all_tiles_in_box_at_time(self, min_lat, max_lat, min_lon, max_lon, dataset, time, **kwargs):
-        return self._metadatastore.find_all_tiles_in_box_at_time(min_lat, max_lat, min_lon, max_lon, dataset, time, rows=5000,
-                                                        **kwargs)
+        return self._metadatastore.find_all_tiles_in_box_at_time(min_lat, max_lat, min_lon, max_lon, dataset, time,
+                                                                 rows=5000,
+                                                                 **kwargs)
 
     @tile_data()
     def find_all_tiles_in_polygon_at_time(self, bounding_polygon, dataset, time, **kwargs):
@@ -206,31 +225,34 @@ class NexusTileService(object):
         :param kwargs: fetch_data: True/False = whether or not to retrieve tile data
         :return:
         """
-        tiles = self._metadatastore.find_tiles_by_exact_bounds(bounds[0], bounds[1], bounds[2], bounds[3], ds, start_time,
-                                                      end_time)
+        tiles = self._metadatastore.find_tiles_by_exact_bounds(bounds[0], bounds[1], bounds[2], bounds[3], ds,
+                                                               start_time,
+                                                               end_time)
         return tiles
 
     @tile_data()
     def find_all_boundary_tiles_at_time(self, min_lat, max_lat, min_lon, max_lon, dataset, time, **kwargs):
-        return self._metadatastore.find_all_boundary_tiles_at_time(min_lat, max_lat, min_lon, max_lon, dataset, time, rows=5000,
-                                                          **kwargs)
+        return self._metadatastore.find_all_boundary_tiles_at_time(min_lat, max_lat, min_lon, max_lon, dataset, time,
+                                                                   rows=5000,
+                                                                   **kwargs)
 
     def get_tiles_bounded_by_box(self, min_lat, max_lat, min_lon, max_lon, ds=None, start_time=0, end_time=-1,
                                  **kwargs):
-        tiles = self.find_tiles_in_box(min_lat, max_lat, min_lon, max_lon, ds, start_time, end_time, **kwargs)
+        tiles, metrics = self.find_tiles_in_box(min_lat, max_lat, min_lon, max_lon, ds, start_time, end_time, **kwargs)
         tiles = self.mask_tiles_to_bbox(min_lat, max_lat, min_lon, max_lon, tiles)
         if 0 < start_time <= end_time:
             tiles = self.mask_tiles_to_time_range(start_time, end_time, tiles)
 
-        return tiles
+        return tiles, metrics
 
     def get_tiles_bounded_by_polygon(self, polygon, ds=None, start_time=0, end_time=-1, **kwargs):
-        tiles = self.find_tiles_in_polygon(polygon, ds, start_time, end_time, **kwargs)
+        tiles, metrics = self.find_tiles_in_polygon(polygon, ds, start_time, end_time,
+                                                    **kwargs)
         tiles = self.mask_tiles_to_polygon(polygon, tiles)
         if 0 < start_time <= end_time:
             tiles = self.mask_tiles_to_time_range(start_time, end_time, tiles)
 
-        return tiles
+        return tiles, metrics
 
     def get_min_max_time_by_granule(self, ds, granule_name):
         start_time, end_time = self._solr.find_min_max_date_from_granule(ds, granule_name)
@@ -260,7 +282,7 @@ class NexusTileService(object):
 
     def get_stats_within_box_at_time(self, min_lat, max_lat, min_lon, max_lon, dataset, time, **kwargs):
         tiles = self._metadatastore.find_all_tiles_within_box_at_time(min_lat, max_lat, min_lon, max_lon, dataset, time,
-                                                             **kwargs)
+                                                                      **kwargs)
 
         return tiles
 
@@ -446,12 +468,14 @@ class NexusTileService(object):
                 pass
 
             try:
-                tile.min_time = datetime.strptime(solr_doc['tile_min_time_dt'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+                tile.min_time = datetime.strptime(solr_doc['tile_min_time_dt'], "%Y-%m-%dT%H:%M:%SZ").replace(
+                    tzinfo=UTC)
             except KeyError:
                 pass
 
             try:
-                tile.max_time = datetime.strptime(solr_doc['tile_max_time_dt'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+                tile.max_time = datetime.strptime(solr_doc['tile_max_time_dt'], "%Y-%m-%dT%H:%M:%SZ").replace(
+                    tzinfo=UTC)
             except KeyError:
                 pass
 
