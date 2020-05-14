@@ -14,15 +14,14 @@
 # limitations under the License.
 
 
-import math
 import calendar
 import itertools
 import logging
 import traceback
 from cStringIO import StringIO
-from datetime import datetime, timedelta
-
+from datetime import datetime
 from functools import partial
+
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,7 +32,6 @@ from backports.functools_lru_cache import lru_cache
 from nexustiles.nexustiles import NexusTileService
 from pytz import timezone
 from scipy import stats
-
 from webservice import Filtering as filtering
 from webservice.NexusHandler import nexus_handler, SparkHandler
 from webservice.webmodel import NexusResults, NoDataException, NexusProcessingException
@@ -174,6 +172,19 @@ class TimeSeriesHandlerImpl(SparkHandler):
         ds, bounding_polygon, start_seconds_from_epoch, end_seconds_from_epoch, apply_seasonal_cycle_filter, apply_low_pass_filter, nparts_requested = self.parse_arguments(
             request)
 
+        metrics_accumulators = {
+            'partitions': self._sc.accumulator(0),
+            'cassandra': self._sc.accumulator(0),
+            'solr': self._sc.accumulator(0),
+            'calculation': self._sc.accumulator(0),
+            'num_tiles': self._sc.accumulator(0)
+        }
+
+        def record_metrics(**kwargs):
+            for metric_key, metric_value in kwargs.items():
+                if metric_key in metrics_accumulators:
+                    metrics_accumulators[metric_key].add(metric_value)
+
         resultsRaw = []
 
         for shortName in ds:
@@ -198,28 +209,24 @@ class TimeSeriesHandlerImpl(SparkHandler):
             spark_nparts = self._spark_nparts(nparts_requested)
             self.log.info('Using {} partitions'.format(spark_nparts))
             start_calculation = datetime.now()
-            results, meta, metrics = spark_driver(daysinrange, bounding_polygon,
-                                                  shortName, spark_nparts=spark_nparts,
-                                                  sc=self._sc)
+            results, meta = spark_driver(daysinrange, bounding_polygon,
+                                         shortName, record_metrics, spark_nparts=spark_nparts,
+                                         sc=self._sc)
             end_calculation = datetime.now()
             self.log.info(
-                "Time series calculation took %s for dataset %s" % (str(end_calculation - start_calculation), shortName))
+                "Time series calculation took %s for dataset %s" % (
+                    str(end_calculation - start_calculation), shortName))
 
-            cum_cassandra_time = sum([partition_metrics['cassandra'] for partition_metrics in metrics], timedelta())
-            cum_solr_time = sum([partition_metrics['solr'] for partition_metrics in metrics], timedelta())
-            cum_calc_time = sum([partition_metrics['calculation'] for partition_metrics in metrics], timedelta())
-            num_tiles_prefilter = sum([partition_metrics['num_tiles'] for partition_metrics in metrics])
-
-            logger.info("""Number of Spark partitions: {}
+            logger.info("""Number of non-empty Spark partitions: {}
                            Number of tiles fetched (pre-filtering): {}
                            Cumulative time to fetch data from Cassandra: {}
                            Cumulative time to fetch data from Solr: {}
                            Cumulative time to calculate time series: {}
-                           Total (actual) time: {}""".format(len(metrics),
-                                                             num_tiles_prefilter,
-                                                             cum_cassandra_time,
-                                                             cum_solr_time,
-                                                             cum_calc_time,
+                           Total (actual) time: {}""".format(metrics_accumulators['partitions'],
+                                                             metrics_accumulators['num_tiles'],
+                                                             metrics_accumulators['cassandra'],
+                                                             metrics_accumulators['solr'],
+                                                             metrics_accumulators['calculation'],
                                                              end_calculation - start_calculation))
 
             if apply_seasonal_cycle_filter:
@@ -507,26 +514,23 @@ class TimeSeriesResults(NexusResults):
         return sio.getvalue()
 
 
-def spark_driver(daysinrange, bounding_polygon, ds, fill=-9999.,
+def spark_driver(daysinrange, bounding_polygon, ds, metrics_callback, fill=-9999.,
                  spark_nparts=1, sc=None):
     nexus_tiles_spark = [(bounding_polygon.wkt, ds,
                           list(daysinrange_part), fill)
                          for daysinrange_part
                          in np.array_split(daysinrange, spark_nparts)]
 
-    calculation_time = sc.accumulator(0)
-
     # Launch Spark computations
     rdd = sc.parallelize(nexus_tiles_spark, spark_nparts)
-    results, metrics = zip(*rdd.map(partial(calc_average_on_day, calculation_time)).collect())
+    results = rdd.flatMap(partial(calc_average_on_day, metrics_callback)).collect()
     results = list(itertools.chain.from_iterable(results))
     results = sorted(results, key=lambda entry: entry["time"])
 
-    logger.info("Calculation time accumulator: {}".format(calculation_time.value))
-    return results, {}, metrics
+    return results, {}
 
 
-def calc_average_on_day(calc_time_accumulator, tile_in_spark):
+def calc_average_on_day(metrics_callback, tile_in_spark):
     import shapely.wkt
     from datetime import datetime
     from pytz import timezone
@@ -536,12 +540,13 @@ def calc_average_on_day(calc_time_accumulator, tile_in_spark):
     if len(timestamps) == 0:
         return []
     tile_service = NexusTileService()
-    ds1_nexus_tiles, metrics = \
+    ds1_nexus_tiles = \
         tile_service.get_tiles_bounded_by_polygon(shapely.wkt.loads(bounding_wkt),
                                                   dataset,
                                                   timestamps[0],
                                                   timestamps[-1],
-                                                  rows=5000)
+                                                  rows=5000,
+                                                  metrics_callback=metrics_callback)
 
     calculation_start = datetime.now()
 
@@ -595,7 +600,7 @@ def calc_average_on_day(calc_time_accumulator, tile_in_spark):
         }
         stats_arr.append(stat)
 
-    calculation_time = (datetime.now() - calculation_start)
-    # calc_time_accumulator.add(calculation_time)
-    metrics['calculation'] = calculation_time
-    return stats_arr, metrics
+    calculation_time = (datetime.now() - calculation_start).total_seconds()
+    metrics_callback(calculation=calculation_time, partitions=1)
+
+    return [stats_arr]
