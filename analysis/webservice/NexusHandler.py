@@ -15,7 +15,7 @@
 
 
 import logging
-from webservice.metrics.MetricsField import SparkAccumulatorMetricsField
+from webservice.metrics.MetricsField import NumberMetricsField, SparkAccumulatorMetricsField
 from webservice.metrics.MetricsRecord import MetricsRecord
 import time
 import types
@@ -600,7 +600,8 @@ class SparkHandler(NexusHandler):
                                          accumulator=self._sc.accumulator(0)),
             SparkAccumulatorMetricsField(key='num_tiles',
                                          description='Number of tiles fetched',
-                                         accumulator=self._sc.accumulator(0))
+                                         accumulator=self._sc.accumulator(0)),
+            NumberMetricsField(key="actual_time", description="Total (actual) time")
         ])
 
 
