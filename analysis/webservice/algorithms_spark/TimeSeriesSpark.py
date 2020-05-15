@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import calendar
 import itertools
 import logging
@@ -34,6 +33,7 @@ from pytz import timezone
 from scipy import stats
 from webservice import Filtering as filtering
 from webservice.NexusHandler import nexus_handler, SparkHandler
+from webservice.metrics.SparkMetricsRecord import SparkMetricsRecord
 from webservice.webmodel import NexusResults, NoDataException, NexusProcessingException
 
 EPOCH = timezone('UTC').localize(datetime(1970, 1, 1))
@@ -171,19 +171,7 @@ class TimeSeriesHandlerImpl(SparkHandler):
         """
         ds, bounding_polygon, start_seconds_from_epoch, end_seconds_from_epoch, apply_seasonal_cycle_filter, apply_low_pass_filter, nparts_requested = self.parse_arguments(
             request)
-
-        metrics_accumulators = {
-            'partitions': self._sc.accumulator(0),
-            'cassandra': self._sc.accumulator(0),
-            'solr': self._sc.accumulator(0),
-            'calculation': self._sc.accumulator(0),
-            'num_tiles': self._sc.accumulator(0)
-        }
-
-        def record_metrics(**kwargs):
-            for metric_key, metric_value in kwargs.items():
-                if metric_key in metrics_accumulators:
-                    metrics_accumulators[metric_key].add(metric_value)
+        metrics_record = self._create_metrics_record()
 
         resultsRaw = []
 
@@ -210,24 +198,14 @@ class TimeSeriesHandlerImpl(SparkHandler):
             self.log.info('Using {} partitions'.format(spark_nparts))
             start_calculation = datetime.now()
             results, meta = spark_driver(daysinrange, bounding_polygon,
-                                         shortName, record_metrics, spark_nparts=spark_nparts,
+                                         shortName, metrics_record.record_metrics, spark_nparts=spark_nparts,
                                          sc=self._sc)
             end_calculation = datetime.now()
             self.log.info(
                 "Time series calculation took %s for dataset %s" % (
                     str(end_calculation - start_calculation), shortName))
 
-            logger.info("""Number of non-empty Spark partitions: {}
-                           Number of tiles fetched (pre-filtering): {}
-                           Cumulative time to fetch data from Cassandra: {}
-                           Cumulative time to fetch data from Solr: {}
-                           Cumulative time to calculate time series: {}
-                           Total (actual) time: {}""".format(metrics_accumulators['partitions'],
-                                                             metrics_accumulators['num_tiles'],
-                                                             metrics_accumulators['cassandra'],
-                                                             metrics_accumulators['solr'],
-                                                             metrics_accumulators['calculation'],
-                                                             end_calculation - start_calculation))
+            metrics_record.print_metrics(logger)
 
             if apply_seasonal_cycle_filter:
                 the_time = datetime.now()
