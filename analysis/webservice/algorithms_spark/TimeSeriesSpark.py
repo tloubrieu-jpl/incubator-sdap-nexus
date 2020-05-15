@@ -33,7 +33,6 @@ from pytz import timezone
 from scipy import stats
 from webservice import Filtering as filtering
 from webservice.NexusHandler import nexus_handler, SparkHandler
-from webservice.metrics.SparkMetricsRecord import SparkMetricsRecord
 from webservice.webmodel import NexusResults, NoDataException, NexusProcessingException
 
 EPOCH = timezone('UTC').localize(datetime(1970, 1, 1))
@@ -184,7 +183,8 @@ class TimeSeriesHandlerImpl(SparkHandler):
                                                                     bounding_polygon.bounds[2],
                                                                     shortName,
                                                                     start_seconds_from_epoch,
-                                                                    end_seconds_from_epoch)
+                                                                    end_seconds_from_epoch,
+                                                                    metrics_callback=metrics_record.record_metrics)
             self.log.info("Finding days in range took %s for dataset %s" % (str(datetime.now() - the_time), shortName))
 
             ndays = len(daysinrange)
@@ -196,14 +196,15 @@ class TimeSeriesHandlerImpl(SparkHandler):
                 self.log.debug('{0}, {1}'.format(i, datetime.utcfromtimestamp(d)))
             spark_nparts = self._spark_nparts(nparts_requested)
             self.log.info('Using {} partitions'.format(spark_nparts))
-            start_calculation = datetime.now()
+            start_spark_time = datetime.now()
             results, meta = spark_driver(daysinrange, bounding_polygon,
                                          shortName, metrics_record.record_metrics, spark_nparts=spark_nparts,
                                          sc=self._sc)
-            end_calculation = datetime.now()
-            self.log.info(
-                "Time series calculation took %s for dataset %s" % (
-                    str(end_calculation - start_calculation), shortName))
+            spark_duration = (datetime.now() - start_spark_time).total_seconds()
+            metrics_record.record_metrics(actual_time=spark_duration)
+            # self.log.info(
+            #     "Time series calculation took %s for dataset %s" % (
+            #         str(end_calculation - start_calculation), shortName))
 
             metrics_record.print_metrics(logger)
 

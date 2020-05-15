@@ -116,10 +116,16 @@ class NexusTileService(object):
     def find_tiles_by_id(self, tile_ids, ds=None, **kwargs):
         return self._metadatastore.find_tiles_by_id(tile_ids, ds=ds, **kwargs)
 
-    def find_days_in_range_asc(self, min_lat, max_lat, min_lon, max_lon, dataset, start_time, end_time, **kwargs):
-        return self._metadatastore.find_days_in_range_asc(min_lat, max_lat, min_lon, max_lon, dataset, start_time,
-                                                          end_time,
-                                                          **kwargs)
+    def find_days_in_range_asc(self, min_lat, max_lat, min_lon, max_lon, dataset, start_time, end_time,
+                               metrics_callback=None, **kwargs):
+        start = datetime.now()
+        result = self._metadatastore.find_days_in_range_asc(min_lat, max_lat, min_lon, max_lon, dataset, start_time,
+                                                            end_time,
+                                                            **kwargs)
+        duration = (datetime.now() - start).total_seconds()
+        if metrics_callback:
+            metrics_callback(solr=duration)
+        return result
 
     @tile_data()
     def find_tile_by_polygon_and_most_recent_day_of_year(self, bounding_polygon, ds, day_of_year, **kwargs):

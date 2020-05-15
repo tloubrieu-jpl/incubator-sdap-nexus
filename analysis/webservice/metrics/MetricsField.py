@@ -31,4 +31,4 @@ class NumberMetricsField(MetricsField):
         super(NumberMetricsField, self).__init__(key, description, initial_value)
 
     def add(self, addend):
-        self.value += addend
+        self._value += addend
