@@ -168,6 +168,7 @@ class TimeSeriesHandlerImpl(SparkHandler):
         :param args: dict
         :return:
         """
+        start_time = datetime.now()
         ds, bounding_polygon, start_seconds_from_epoch, end_seconds_from_epoch, apply_seasonal_cycle_filter, apply_low_pass_filter, nparts_requested = self.parse_arguments(
             request)
         metrics_record = self._create_metrics_record()
@@ -196,17 +197,9 @@ class TimeSeriesHandlerImpl(SparkHandler):
                 self.log.debug('{0}, {1}'.format(i, datetime.utcfromtimestamp(d)))
             spark_nparts = self._spark_nparts(nparts_requested)
             self.log.info('Using {} partitions'.format(spark_nparts))
-            start_spark_time = datetime.now()
             results, meta = spark_driver(daysinrange, bounding_polygon,
                                          shortName, metrics_record.record_metrics, spark_nparts=spark_nparts,
                                          sc=self._sc)
-            spark_duration = (datetime.now() - start_spark_time).total_seconds()
-            metrics_record.record_metrics(actual_time=spark_duration)
-            # self.log.info(
-            #     "Time series calculation took %s for dataset %s" % (
-            #         str(end_calculation - start_calculation), shortName))
-
-            metrics_record.print_metrics(logger)
 
             if apply_seasonal_cycle_filter:
                 the_time = datetime.now()
@@ -273,6 +266,10 @@ class TimeSeriesHandlerImpl(SparkHandler):
                                 maxLat=bounding_polygon.bounds[3], minLon=bounding_polygon.bounds[0],
                                 maxLon=bounding_polygon.bounds[2], ds=ds, startTime=start_seconds_from_epoch,
                                 endTime=end_seconds_from_epoch)
+
+        total_duration = (datetime.now() - start_time).total_seconds()
+        metrics_record.record_metrics(actual_time=total_duration)
+        metrics_record.print_metrics(logger)
 
         self.log.info("Merging results and calculating comparisons took %s" % (str(datetime.now() - the_time)))
         return res

@@ -369,7 +369,7 @@ class SparkHandler(NexusHandler):
                 break
         return status
 
-    def _find_global_tile_set(self):
+    def _find_global_tile_set(self, metrics_callback=None):
         # This only works for a single dataset.  If more than one is provided,
         # we use the first one and ignore the rest.
         if type(self._ds) in (list, tuple):
@@ -384,7 +384,8 @@ class SparkHandler(NexusHandler):
                                                                self._maxLon,
                                                                ds,
                                                                self._startTime,
-                                                               self._endTime)
+                                                               self._endTime,
+                                                               metrics_callback=metrics_callback)
 
         # Empty tile set will be returned upon failure to find the global
         # tile set.
@@ -394,7 +395,8 @@ class SparkHandler(NexusHandler):
         # tile set.
         for t in t_in_range:
             nexus_tiles = self._tile_service.get_tiles_bounded_by_box(self._minLat, self._maxLat, self._minLon,
-                                                                      self._maxLon, ds=ds, start_time=t, end_time=t)
+                                                                      self._maxLon, ds=ds, start_time=t, end_time=t,
+                                                                      metrics_callback=metrics_callback)
             if self._set_info_from_tile_set(nexus_tiles):
                 # Successfully retrieved global tile set from nexus_tiles,
                 # so no need to check any other time stamps.
@@ -586,6 +588,9 @@ class SparkHandler(NexusHandler):
 
     def _create_metrics_record(self):
         return MetricsRecord([
+            SparkAccumulatorMetricsField(key='num_tiles',
+                                         description='Number of tiles fetched',
+                                         accumulator=self._sc.accumulator(0)),
             SparkAccumulatorMetricsField(key='partitions',
                                          description='Number of non-empty Spark partitions',
                                          accumulator=self._sc.accumulator(0)),
@@ -597,9 +602,6 @@ class SparkHandler(NexusHandler):
                                          accumulator=self._sc.accumulator(0)),
             SparkAccumulatorMetricsField(key='calculation',
                                          description='Cumulative time to do calculations',
-                                         accumulator=self._sc.accumulator(0)),
-            SparkAccumulatorMetricsField(key='num_tiles',
-                                         description='Number of tiles fetched',
                                          accumulator=self._sc.accumulator(0)),
             NumberMetricsField(key="actual_time", description="Total (actual) time")
         ])

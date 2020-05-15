@@ -141,6 +141,8 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
         :param args: dict
         :return:
         """
+        request_start_time = datetime.now()
+
         metrics_record = self._create_metrics_record()
 
         ds, bbox, start_time, end_time, nparts_requested = self.parse_arguments(compute_options)
@@ -152,7 +154,7 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                              start_time,
                              end_time)
 
-        nexus_tiles = self._find_global_tile_set()
+        nexus_tiles = self._find_global_tile_set(metrics_callback=metrics_record.record_metrics)
 
         if len(nexus_tiles) == 0:
             raise NoDataException(reason="No data found for selected timeframe")
@@ -211,23 +213,16 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
 
         rdd = self._sc.parallelize(nexus_tiles_spark, spark_nparts)
         sum_count_part = rdd.map(partial(self._map, metrics_record.record_metrics))
-        sum_count = \
-            sum_count_part.combineByKey(lambda val: val,
-                                        lambda x, val: (x[0] + val[0],
-                                                        x[1] + val[1]),
-                                        lambda x, y: (x[0] + y[0], x[1] + y[1]))
-        fill = self._fill
-        avg_tiles = \
-            sum_count.map(lambda (bounds, (sum_tile, cnt_tile)):
-                          (bounds, [[{'avg': (sum_tile[y, x] / cnt_tile[y, x])
-                          if (cnt_tile[y, x] > 0)
-                          else fill,
-                                      'cnt': cnt_tile[y, x]}
-                                     for x in
-                                     range(sum_tile.shape[1])]
-                                    for y in
-                                    range(sum_tile.shape[0])])).collect()
+        calculation_duration = 0.0
+        calculation_start = datetime.now()
+        sum_count = sum_count_part.combineByKey(lambda val: val,
+                                                lambda x, val: (x[0] + val[0],
+                                                                x[1] + val[1]),
+                                                lambda x, y: (x[0] + y[0], x[1] + y[1]))
+        calculation_duration += (datetime.now() - calculation_start).total_seconds()
+        avg_tiles = sum_count.map(partial(calculate_means, metrics_record.record_metrics, self._fill)).collect()
 
+        calculation_start = datetime.now()
         # Combine subset results to produce global map.
         #
         # The tiles below are NOT Nexus objects.  They are tuples
@@ -263,6 +258,8 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                             tile_min_lon, tile_max_lon,
                             y0, y1, x0, x1))
 
+        calculation_duration += (datetime.now() - calculation_start).total_seconds()
+
         # Store global map in a NetCDF file.
         self._create_nc_file(a, 'tam.nc', 'val', fill=self._fill)
 
@@ -271,6 +268,8 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                      'lat': self._ind2lat(y), 'lon': self._ind2lon(x)}
                     for x in range(a.shape[1])] for y in range(a.shape[0])]
 
+        total_duration = (datetime.now() - request_start_time).total_seconds()
+        metrics_record.record_metrics(actual_time=total_duration, calculation=calculation_duration)
         metrics_record.print_metrics(self.log)
 
         return NexusResults(results=results, meta={}, stats=None,
@@ -297,6 +296,8 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
         sum_tile = np.array(np.zeros(tile_inbounds_shape, dtype=np.float64))
         cnt_tile = np.array(np.zeros(tile_inbounds_shape, dtype=np.uint32))
         t_start = startTime
+
+        calculation_duration = 0.0
         while t_start <= endTime:
             t_end = min(t_start + t_incr, endTime)
 
@@ -307,12 +308,34 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                                                                 end_time=t_end,
                                                                 metrics_callback=metrics_callback)
 
+            calculation_start = datetime.now()
             for tile in nexus_tiles:
                 tile.data.data[:, :] = np.nan_to_num(tile.data.data)
                 sum_tile += tile.data.data[0, min_y:max_y + 1, min_x:max_x + 1]
                 cnt_tile += (~tile.data.mask[0, min_y:max_y + 1, min_x:max_x + 1]).astype(np.uint8)
             t_start = t_end + 1
+            calculation_duration += (datetime.now() - calculation_start).total_seconds()
 
-        metrics_callback(partitions=1)
+        metrics_callback(calculation=calculation_duration, partitions=1)
 
         return (min_lat, max_lat, min_lon, max_lon), (sum_tile, cnt_tile)
+
+
+def calculate_means(metrics_callback, fill, (bounds, (sum_tile, cnt_tile))):
+    start_time = datetime.now()
+
+    outer = []
+    for y in range(sum_tile.shape[0]):
+        inner = []
+        for x in range(sum_tile.shape[1]):
+            value = {
+                'avg': (sum_tile[y, x] / cnt_tile[y, x]) if (cnt_tile[y, x] > 0) else fill,
+                'cnt': cnt_tile[y, x]
+            }
+            inner.append(value)
+        outer.append(inner)
+
+    duration = (datetime.now() - start_time).total_seconds()
+    metrics_callback(calculation=duration)
+
+    return bounds, outer
