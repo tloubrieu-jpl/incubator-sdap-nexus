@@ -1,3 +1,2 @@
 from MetricsField import MetricsField, SparkAccumulatorMetricsField, NumberMetricsField
 from MetricsRecord import MetricsRecord
-from SparkMetricsRecord import SparkMetricsRecord
