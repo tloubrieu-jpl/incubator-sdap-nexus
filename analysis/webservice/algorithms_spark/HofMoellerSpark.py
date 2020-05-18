@@ -17,6 +17,7 @@ import itertools
 import logging
 from cStringIO import StringIO
 from datetime import datetime
+from functools import partial
 
 import matplotlib.pyplot as plt
 import mpld3
@@ -26,11 +27,8 @@ from matplotlib import cm
 from matplotlib.ticker import FuncFormatter
 from nexustiles.nexustiles import NexusTileService
 from pytz import timezone
-
 from webservice.NexusHandler import SparkHandler, nexus_handler
 from webservice.webmodel import NexusResults, NoDataException, NexusProcessingException
-from webservice.metrics.MetricsField import SparkAccumulatorMetricsField
-from functools import partial
 
 EPOCH = timezone('UTC').localize(datetime(1970, 1, 1))
 ISO_8601 = '%Y-%m-%dT%H:%M:%SZ'

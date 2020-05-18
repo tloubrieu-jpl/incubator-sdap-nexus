@@ -15,15 +15,14 @@
 
 
 import logging
-from webservice.metrics.MetricsField import NumberMetricsField, SparkAccumulatorMetricsField
-from webservice.metrics.MetricsRecord import MetricsRecord
 import time
 import types
 
 import numpy as np
 from netCDF4 import Dataset
 from nexustiles.nexustiles import NexusTileService
-
+from webservice.metrics.MetricsField import NumberMetricsField, SparkAccumulatorMetricsField
+from webservice.metrics.MetricsRecord import MetricsRecord
 from webservice.webmodel import NexusProcessingException
 
 AVAILABLE_HANDLERS = []
