@@ -44,28 +44,23 @@ def tile_data(default_fetch=True):
     def tile_data_decorator(func):
         @wraps(func)
         def fetch_data_for_func(*args, **kwargs):
-            if ('fetch_data' not in kwargs and not default_fetch) or (
-                    'fetch_data' in kwargs and not kwargs['fetch_data']):
-                solr_docs = func(*args, **kwargs)
-                tiles = args[0]._solr_docs_to_tiles(*solr_docs)
-                return tiles
-            else:
-                solr_start = datetime.now()
-                solr_docs = func(*args, **kwargs)
-                solr_duration = (datetime.now() - solr_start).total_seconds()
-                tiles = args[0]._solr_docs_to_tiles(*solr_docs)
+            solr_start = datetime.now()
+            solr_docs = func(*args, **kwargs)
+            solr_duration = (datetime.now() - solr_start).total_seconds()
+            tiles = args[0]._solr_docs_to_tiles(*solr_docs)
+
+            cassandra_duration = 0
+            if ('fetch_data' in kwargs and kwargs['fetch_data']) or ('fetch_data' not in kwargs and default_fetch):
                 if len(tiles) > 0:
                     cassandra_start = datetime.now()
                     args[0].fetch_data_for_tiles(*tiles)
-                    cassandra_duration = (datetime.now() - cassandra_start).total_seconds()
-                else:
-                    cassandra_duration = 0
+                    cassandra_duration += (datetime.now() - cassandra_start).total_seconds()
 
-                if 'metrics_callback' in kwargs:
-                    kwargs['metrics_callback'](cassandra=cassandra_duration,
-                                               solr=solr_duration,
-                                               num_tiles=len(tiles))
-                return tiles
+            if 'metrics_callback' in kwargs:
+                kwargs['metrics_callback'](cassandra=cassandra_duration,
+                                           solr=solr_duration,
+                                           num_tiles=len(tiles))
+            return tiles
 
         return fetch_data_for_func
 

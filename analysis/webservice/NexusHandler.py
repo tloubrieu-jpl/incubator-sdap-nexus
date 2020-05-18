@@ -592,7 +592,7 @@ class SparkHandler(NexusHandler):
                                          description='Number of tiles fetched',
                                          accumulator=self._sc.accumulator(0)),
             SparkAccumulatorMetricsField(key='partitions',
-                                         description='Number of non-empty Spark partitions',
+                                         description='Number of Spark partitions',
                                          accumulator=self._sc.accumulator(0)),
             SparkAccumulatorMetricsField(key='cassandra',
                                          description='Cumulative time to fetch data from Cassandra',
@@ -603,6 +603,7 @@ class SparkHandler(NexusHandler):
             SparkAccumulatorMetricsField(key='calculation',
                                          description='Cumulative time to do calculations',
                                          accumulator=self._sc.accumulator(0)),
+            NumberMetricsField(key='reduce', description='Actual time to reduce results'),
             NumberMetricsField(key="actual_time", description="Total (actual) time")
         ])
 

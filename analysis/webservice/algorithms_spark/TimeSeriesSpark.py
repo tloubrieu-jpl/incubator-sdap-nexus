@@ -499,6 +499,7 @@ def spark_driver(daysinrange, bounding_polygon, ds, metrics_callback, fill=-9999
 
     # Launch Spark computations
     rdd = sc.parallelize(nexus_tiles_spark, spark_nparts)
+    metrics_callback(partitions=rdd.getNumPartitions())
     results = rdd.flatMap(partial(calc_average_on_day, metrics_callback)).collect()
     results = list(itertools.chain.from_iterable(results))
     results = sorted(results, key=lambda entry: entry["time"])
@@ -577,6 +578,6 @@ def calc_average_on_day(metrics_callback, tile_in_spark):
         stats_arr.append(stat)
 
     calculation_time = (datetime.now() - calculation_start).total_seconds()
-    metrics_callback(calculation=calculation_time, partitions=1)
+    metrics_callback(calculation=calculation_time)
 
     return [stats_arr]

@@ -212,17 +212,18 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
         self.log.info('Using {} partitions'.format(spark_nparts))
 
         rdd = self._sc.parallelize(nexus_tiles_spark, spark_nparts)
+        metrics_record.record_metrics(partitions=rdd.getNumPartitions())
         sum_count_part = rdd.map(partial(self._map, metrics_record.record_metrics))
-        calculation_duration = 0.0
-        calculation_start = datetime.now()
+        reduce_duration = 0
+        reduce_start = datetime.now()
         sum_count = sum_count_part.combineByKey(lambda val: val,
                                                 lambda x, val: (x[0] + val[0],
                                                                 x[1] + val[1]),
                                                 lambda x, y: (x[0] + y[0], x[1] + y[1]))
-        calculation_duration += (datetime.now() - calculation_start).total_seconds()
+        reduce_duration += (datetime.now() - reduce_start).total_seconds()
         avg_tiles = sum_count.map(partial(calculate_means, metrics_record.record_metrics, self._fill)).collect()
 
-        calculation_start = datetime.now()
+        reduce_start = datetime.now()
         # Combine subset results to produce global map.
         #
         # The tiles below are NOT Nexus objects.  They are tuples
@@ -258,7 +259,7 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                             tile_min_lon, tile_max_lon,
                             y0, y1, x0, x1))
 
-        calculation_duration += (datetime.now() - calculation_start).total_seconds()
+        reduce_duration += (datetime.now() - reduce_start).total_seconds()
 
         # Store global map in a NetCDF file.
         self._create_nc_file(a, 'tam.nc', 'val', fill=self._fill)
@@ -269,7 +270,7 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
                     for x in range(a.shape[1])] for y in range(a.shape[0])]
 
         total_duration = (datetime.now() - request_start_time).total_seconds()
-        metrics_record.record_metrics(actual_time=total_duration, calculation=calculation_duration)
+        metrics_record.record_metrics(actual_time=total_duration, reduce=reduce_duration)
         metrics_record.print_metrics(self.log)
 
         return NexusResults(results=results, meta={}, stats=None,
@@ -316,7 +317,7 @@ class TimeAvgMapSparkHandlerImpl(SparkHandler):
             t_start = t_end + 1
             calculation_duration += (datetime.now() - calculation_start).total_seconds()
 
-        metrics_callback(calculation=calculation_duration, partitions=1)
+        metrics_callback(calculation=calculation_duration)
 
         return (min_lat, max_lat, min_lon, max_lon), (sum_tile, cnt_tile)
 
