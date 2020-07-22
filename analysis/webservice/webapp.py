@@ -26,6 +26,7 @@ from tornado.options import define, options, parse_command_line
 from webservice import NexusHandler
 from webservice.nexus_tornado.request.handlers import NexusRequestHandler
 
+
 def inject_args_in_config(args, config):
     """
         Takes command argparse arguments and push them in the config
@@ -37,9 +38,9 @@ def inject_args_in_config(args, config):
         n = t_opt.name
         first_ = n.find('_')
         if first_ > 0:
-            s, o = n[:first_], n[first_+1:]
+            s, o = n[:first_], n[first_ + 1:]
             v = t_opt.value()
-            log.info('inject argument {} = {} in configuration section {}, option {}'.format(n, v , s, o))
+            log.info('inject argument {} = {} in configuration section {}, option {}'.format(n, v, s, o))
             if not config.has_section(s):
                 config.add_section(s)
             config.set(s, o, v)
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     define('solr_time_out', default=60,
            help='time out for solr requests in seconds, default (60) is ok for most deployments'
                 ' when solr performances are not good this might need to be increased')
+    define('solr_host', help='solr host and port')
 
     parse_command_line()
     algorithm_config = inject_args_in_config(options, algorithm_config)
@@ -101,6 +103,7 @@ if __name__ == "__main__":
         if issubclass(clazzWrapper, webservice.algorithms_spark.NexusCalcSparkHandler.NexusCalcSparkHandler):
             if spark_context is None:
                 from pyspark.sql import SparkSession
+
                 spark = SparkSession.builder.appName("nexus-analysis").getOrCreate()
                 spark_context = spark.sparkContext
 
