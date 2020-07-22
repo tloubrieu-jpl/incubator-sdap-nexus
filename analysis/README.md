@@ -18,7 +18,7 @@ Python module that exposes NEXUS analytical capabilities via a HTTP webservice. 
 
     ````
     cd analysis
-    conda install pyspark
+    conda install pyspark==2.4.0 
     conda install -c conda-forge --file conda-requirements.txt
     #conda install numpy matplotlib mpld3 scipy netCDF4 basemap gdal pyproj=1.9.5.1 libnetcdf=4.3.3.1
     ````
