@@ -1,5 +1,5 @@
 [cassandra]
-host=sdap-cassandra
+host=localhost
 port=9042
 keyspace=nexustiles
 local_datacenter=datacenter1
@@ -15,7 +15,7 @@ table=nexus-jpl-table
 region=us-west-2
 
 [solr]
-host=sdap-solr:8983
+host=localhost:8983
 core=nexustiles
 
 [datastore]

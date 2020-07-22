@@ -6,6 +6,7 @@ from webservice.algorithms.NexusCalcHandler import NexusCalcHandler
 from webservice.metrics import MetricsRecord, SparkAccumulatorMetricsField, NumberMetricsField
 from webservice.webmodel import NexusProcessingException
 
+logger = logging.getLogger(__name__)
 
 class NexusCalcSparkHandler(NexusCalcHandler):
     class SparkJobContext(object):

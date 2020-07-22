@@ -69,6 +69,7 @@ if __name__ == "__main__":
            help='time out for solr requests in seconds, default (60) is ok for most deployments'
                 ' when solr performances are not good this might need to be increased')
     define('solr_host', help='solr host and port')
+    define('cassandra_host', help='cassandra host')
 
     parse_command_line()
     algorithm_config = inject_args_in_config(options, algorithm_config)
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         else:
             handlers.append(
                 (clazzWrapper.path, NexusRequestHandler,
-                 dict(clazz=clazzWrapper, thread_pool=request_thread_pool)))
+                 dict(clazz=clazzWrapper, algorithm_config=algorithm_config, thread_pool=request_thread_pool)))
 
 
     class VersionHandler(tornado.web.RequestHandler):
