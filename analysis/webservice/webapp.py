@@ -70,6 +70,8 @@ if __name__ == "__main__":
                 ' when solr performances are not good this might need to be increased')
     define('solr_host', help='solr host and port')
     define('cassandra_host', help='cassandra host')
+    define('cassandra_username', help='cassandra username')
+    define('cassandra_password', help='cassandra password')
 
     parse_command_line()
     algorithm_config = inject_args_in_config(options, algorithm_config)

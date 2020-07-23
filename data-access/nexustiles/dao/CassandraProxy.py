@@ -17,6 +17,7 @@ import uuid
 from ConfigParser import NoOptionError
 from multiprocessing.synchronize import Lock
 
+from cassandra.auth import PlainTextAuthProvider
 import nexusproto.DataTile_pb2 as nexusproto
 import numpy as np
 from cassandra.cqlengine import columns, connection, CQLEngineException
@@ -151,6 +152,8 @@ class CassandraProxy(object):
     def __init__(self, config):
         self.config = config
         self.__cass_url = config.get("cassandra", "host")
+        self.__cass_username = config.get("cassandra", "username")
+        self.__cass_password = config.get("cassandra", "password")
         self.__cass_keyspace = config.get("cassandra", "keyspace")
         self.__cass_local_DC = config.get("cassandra", "local_datacenter")
         self.__cass_protocol_version = config.getint("cassandra", "protocol_version")
@@ -174,10 +177,15 @@ class CassandraProxy(object):
         elif self.__cass_dc_policy == 'WhiteListRoundRobinPolicy':
             dc_policy = WhiteListRoundRobinPolicy([self.__cass_url])
 
+        if self.__cass_username and self.__cass_password:
+            auth_provider = PlainTextAuthProvider(username=self.__cass_username, password=self.__cass_password)
+        else:
+            auth_provider = None
         token_policy = TokenAwarePolicy(dc_policy)
         connection.setup([host for host in self.__cass_url.split(',')], self.__cass_keyspace,
                          protocol_version=self.__cass_protocol_version, load_balancing_policy=token_policy,
-                         port=self.__cass_port)
+                         port=self.__cass_port,
+                         auth_provider=auth_provider)
 
     def fetch_nexus_tiles(self, *tile_ids):
         tile_ids = [uuid.UUID(str(tile_id)) for tile_id in tile_ids if
