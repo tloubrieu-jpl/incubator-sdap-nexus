@@ -19,7 +19,6 @@ from datetime import datetime
 
 import numpy as np
 import pytz
-from nexustiles.nexustiles import NexusTileService
 from shapely import wkt
 from shapely.geometry import Polygon
 
@@ -143,6 +142,7 @@ class DailyDifferenceAverageNexusImplSpark(NexusCalcSparkHandler):
         self.log.debug("Calling Spark Driver")
         try:
             spark_result = spark_anomolies_driver(tile_ids, wkt.dumps(bounding_polygon), dataset, climatology,
+                                                  self._tile_service_factory,
                                                   sc=self._sc)
         except Exception as e:
             self.log.exception(e)
@@ -264,7 +264,7 @@ def determine_parllelism(num_tiles):
     return num_partitions
 
 
-def spark_anomolies_driver(tile_ids, bounding_wkt, dataset, climatology, sc=None):
+def spark_anomolies_driver(tile_ids, bounding_wkt, dataset, climatology, tile_service_factory, sc=None):
     from functools import partial
 
     with DRIVER_LOCK:
@@ -297,7 +297,7 @@ def spark_anomolies_driver(tile_ids, bounding_wkt, dataset, climatology, sc=None
         return sum_cnt_var_tuple[0] / sum_cnt_var_tuple[1], np.sqrt(sum_cnt_var_tuple[2])
 
     result = rdd \
-        .mapPartitions(partial(calculate_diff, bounding_wkt=bounding_wkt_b, dataset=dataset_b,
+        .mapPartitions(partial(calculate_diff, tile_service_factory, bounding_wkt=bounding_wkt_b, dataset=dataset_b,
                                climatology=climatology_b)) \
         .reduceByKey(add_tuple_elements) \
         .mapValues(compute_avg_and_std) \
@@ -307,7 +307,7 @@ def spark_anomolies_driver(tile_ids, bounding_wkt, dataset, climatology, sc=None
     return result
 
 
-def calculate_diff(tile_ids, bounding_wkt, dataset, climatology):
+def calculate_diff(tile_ids, tile_service_factory, bounding_wkt, dataset, climatology):
     from itertools import chain
 
     # Construct a list of generators that yield (day, sum, count, variance)
@@ -316,7 +316,7 @@ def calculate_diff(tile_ids, bounding_wkt, dataset, climatology):
     tile_ids = list(tile_ids)
     if len(tile_ids) == 0:
         return []
-    tile_service = NexusTileService()
+    tile_service = tile_service_factory.get_service()
 
     for tile_id in tile_ids:
         # Get the dataset tile

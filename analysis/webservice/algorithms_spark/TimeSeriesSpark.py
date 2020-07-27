@@ -28,7 +28,6 @@ import pytz
 import shapely.geometry
 import shapely.wkt
 from backports.functools_lru_cache import lru_cache
-from nexustiles.nexustiles import NexusTileService
 from pytz import timezone
 from scipy import stats
 from webservice import Filtering as filtering

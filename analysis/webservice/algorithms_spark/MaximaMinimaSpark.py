@@ -207,7 +207,7 @@ class MaximaMinimaSparkHandlerImpl(NexusCalcSparkHandler):
         self.log.info('Using {} partitions'.format(spark_nparts))
 
         rdd = self._sc.parallelize(nexus_tiles_spark, spark_nparts)
-        max_min_part = rdd.map(self._map)
+        max_min_part = rdd.map(self._map, self._tile_service_factory )
         max_min_count = \
             max_min_part.combineByKey(lambda val: val,
                                         lambda x, val: (np.maximum(x[0], val[0]),   # Max
@@ -283,7 +283,7 @@ class MaximaMinimaSparkHandlerImpl(NexusCalcSparkHandler):
 
     # this operates on only one nexus tile bound over time. Can assume all nexus_tiles are the same shape
     @staticmethod
-    def _map(tile_in_spark):
+    def _map(tile_service_factory, tile_in_spark):
         # tile_in_spark is a spatial tile that corresponds to nexus tiles of the same area
         tile_bounds = tile_in_spark[0]
         (min_lat, max_lat, min_lon, max_lon,
@@ -291,7 +291,7 @@ class MaximaMinimaSparkHandlerImpl(NexusCalcSparkHandler):
         startTime = tile_in_spark[1]
         endTime = tile_in_spark[2]
         ds = tile_in_spark[3]
-        tile_service = NexusTileService()
+        tile_service = tile_service_factory.get_service()
 
         tile_inbounds_shape = (max_y - min_y + 1, max_x - min_x + 1)
 

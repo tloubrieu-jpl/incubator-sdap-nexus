@@ -41,12 +41,12 @@ LONGITUDE = 1
 
 class HofMoellerCalculator(object):
     @staticmethod
-    def hofmoeller_stats(metrics_callback, tile_in_spark):
+    def hofmoeller_stats(tile_service_factory, metrics_callback, tile_in_spark):
 
         (latlon, tile_id, index,
          min_lat, max_lat, min_lon, max_lon) = tile_in_spark
 
-        tile_service = NexusTileService()
+        tile_service = tile_service_factory.get_service()
         try:
             # Load the dataset tile
             tile = tile_service.find_tile_by_id(tile_id, metrics_callback=metrics_callback)[0]
@@ -263,7 +263,7 @@ def hof_tuple_to_dict(t, avg_var_name):
             'min': t[7]}
 
 
-def spark_driver(sc, latlon, nexus_tiles_spark, metrics_callback):
+def spark_driver(sc, latlon, nexus_tiles_spark, tile_service_factory, metrics_callback):
     # Parallelize list of tile ids
     rdd = sc.parallelize(nexus_tiles_spark, determine_parllelism(len(nexus_tiles_spark)))
     if latlon == 0:
@@ -279,7 +279,7 @@ def spark_driver(sc, latlon, nexus_tiles_spark, metrics_callback):
     # the value is a tuple of intermediate statistics for the specified
     # coordinate within a single NEXUS tile.
     metrics_callback(partitions=rdd.getNumPartitions())
-    results = rdd.flatMap(partial(HofMoellerCalculator.hofmoeller_stats, metrics_callback))
+    results = rdd.flatMap(partial(HofMoellerCalculator.hofmoeller_stats, tile_service_factory, metrics_callback))
 
     # Combine tuples across tiles with input key = (time, lat|lon)
     # Output a key value pair with key = (time)
@@ -357,7 +357,7 @@ class LatitudeTimeHoffMoellerSparkHandlerImpl(BaseHoffMoellerSparkHandlerImpl):
         if len(nexus_tiles_spark) == 0:
             raise NoDataException(reason="No data found for selected timeframe")
 
-        results = spark_driver(self._sc, self._latlon, nexus_tiles_spark, metrics_record.record_metrics)
+        results = spark_driver(self._sc, self._latlon, nexus_tiles_spark, self._tile_service_factory, metrics_record.record_metrics)
         results = filter(None, results)
         results = sorted(results, key=lambda entry: entry['time'])
         for i in range(len(results)):

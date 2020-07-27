@@ -20,7 +20,6 @@ from calendar import timegm, monthrange
 from datetime import datetime
 
 import numpy as np
-from nexustiles.nexustiles import NexusTileService
 
 from webservice.NexusHandler import nexus_handler, DEFAULT_PARAMETERS_SPEC
 from webservice.algorithms_spark.NexusCalcSparkHandler import NexusCalcSparkHandler
@@ -35,14 +34,14 @@ class ClimMapNexusSparkHandlerImpl(NexusCalcSparkHandler):
     params = DEFAULT_PARAMETERS_SPEC
 
     @staticmethod
-    def _map(tile_in_spark):
+    def _map(tile_service_factory, tile_in_spark):
         tile_bounds = tile_in_spark[0]
         (min_lat, max_lat, min_lon, max_lon,
          min_y, max_y, min_x, max_x) = tile_bounds
         startTime = tile_in_spark[1]
         endTime = tile_in_spark[2]
         ds = tile_in_spark[3]
-        tile_service = NexusTileService()
+        tile_service = tile_service_factory.get_service()
         # print 'Started tile', tile_bounds
         # sys.stdout.flush()
         tile_inbounds_shape = (max_y - min_y + 1, max_x - min_x + 1)
@@ -196,7 +195,7 @@ class ClimMapNexusSparkHandlerImpl(NexusCalcSparkHandler):
         spark_nparts = self._spark_nparts(nparts_requested)
         self.log.info('Using {} partitions'.format(spark_nparts))
         rdd = self._sc.parallelize(nexus_tiles_spark, spark_nparts)
-        sum_count_part = rdd.map(self._map)
+        sum_count_part = rdd.map(self._map, self._tile_service_factory)
         sum_count = \
             sum_count_part.combineByKey(lambda val: val,
                                         lambda x, val: (x[0] + val[0],
