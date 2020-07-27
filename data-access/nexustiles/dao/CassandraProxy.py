@@ -13,20 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import uuid
 from ConfigParser import NoOptionError
-from multiprocessing.synchronize import Lock
 
-from cassandra.auth import PlainTextAuthProvider
 import nexusproto.DataTile_pb2 as nexusproto
 import numpy as np
+from cassandra.auth import PlainTextAuthProvider
 from cassandra.cqlengine import columns, connection, CQLEngineException
 from cassandra.cqlengine.models import Model
 from cassandra.policies import TokenAwarePolicy, DCAwareRoundRobinPolicy, WhiteListRoundRobinPolicy
+from multiprocessing.synchronize import Lock
 from nexusproto.serialization import from_shaped_array
 
 INIT_LOCK = Lock()
 
+logger = logging.getLogger(__name__)
 
 class NexusTileData(Model):
     __table_name__ = 'sea_surface_temp'
@@ -171,7 +173,7 @@ class CassandraProxy(object):
                 self.__open()
 
     def __open(self):
-
+        logger.info("Connecting to cassandra at " + self.__cass_url)
         if self.__cass_dc_policy == 'DCAwareRoundRobinPolicy':
             dc_policy = DCAwareRoundRobinPolicy(self.__cass_local_DC)
         elif self.__cass_dc_policy == 'WhiteListRoundRobinPolicy':
