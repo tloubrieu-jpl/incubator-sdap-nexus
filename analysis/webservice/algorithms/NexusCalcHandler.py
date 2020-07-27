@@ -2,6 +2,7 @@ import time
 import types
 
 from nexustiles.nexustiles import NexusTileService
+from nexustiles import NexusTileServiceFactory
 
 
 class NexusCalcHandler(object):
@@ -26,11 +27,15 @@ class NexusCalcHandler(object):
         self.algorithm_config = algorithm_config
         self._skipCassandra = skipCassandra
         self._skipSolr = skipSolr
-        self._tile_service = NexusTileService(skipDatastore=self._skipCassandra,
+        self._tile_service_factory = NexusTileServiceFactory(skipDatastore=self._skipCassandra,
                                               skipMetadatastore=self._skipSolr,
                                               config=self.algorithm_config)
+        self._tile_service = None
 
     def _get_tile_service(self):
+        if self._tile_service is None:
+            self._tile_service = self._tile_service_factory.get_service()
+
         return self._tile_service
 
     def calc(self, computeOptions, **args):

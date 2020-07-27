@@ -94,8 +94,8 @@ if __name__ == "__main__":
 
     handlers = []
 
-    log.info("Running Nexus Initializers")
-    NexusHandler.executeInitializers(algorithm_config)
+    #log.info("Running Nexus Initializers")
+    #NexusHandler.executeInitializers(algorithm_config)
 
     max_request_threads = webconfig.getint("global", "server.max_simultaneous_requests")
     log.info("Initializing request ThreadPool to %s" % max_request_threads)

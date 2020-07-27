@@ -487,7 +487,7 @@ class TimeSeriesResults(NexusResults):
         return sio.getvalue()
 
 
-def spark_driver(daysinrange, bounding_polygon, ds, metrics_callback, fill=-9999.,
+def spark_driver(self, daysinrange, bounding_polygon, ds, metrics_callback, fill=-9999.,
                  spark_nparts=1, sc=None):
     nexus_tiles_spark = [(bounding_polygon.wkt, ds,
                           list(daysinrange_part), fill)
@@ -504,7 +504,7 @@ def spark_driver(daysinrange, bounding_polygon, ds, metrics_callback, fill=-9999
     return results, {}
 
 
-def calc_average_on_day(metrics_callback, tile_in_spark):
+def calc_average_on_day(self, metrics_callback, tile_in_spark):
     import shapely.wkt
     from datetime import datetime
     from pytz import timezone
@@ -513,6 +513,7 @@ def calc_average_on_day(metrics_callback, tile_in_spark):
     (bounding_wkt, dataset, timestamps, fill) = tile_in_spark
     if len(timestamps) == 0:
         return []
+    self._get_tile_service()
     tile_service = NexusTileService()
     ds1_nexus_tiles = \
         tile_service.get_tiles_bounded_by_polygon(shapely.wkt.loads(bounding_wkt),

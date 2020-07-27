@@ -8,21 +8,21 @@ rootWebpage:
 webapp:
   enabled: true
   distributed:
-    image: nexusjpl/nexus-webapp:distributed.0.1.5
+    image: nexusjpl/nexus-webapp:distributed.0.1.6a5
 
     ## Use any of the driver configuration options available at
     ## https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/master/docs/user-guide.md
     driver:
-      cores: 1
-      coreLimit: "1200m"
-      memory: "512m"
+      cores: 0.5
+      coreLimit: "600m"
+      memory: "256m"
 
     ## Use any of the executor configuration options available at
     ## https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/blob/master/docs/user-guide.md
     executor:
-      cores: 1
+      cores: 0.5
       instances: 2
-      memory: "512m"
+      memory: "256m"
 
 ## This section deals with the ingestion components of SDAP
 ingestion:
@@ -34,19 +34,19 @@ ingestion:
     image: nexusjpl/granule-ingester:0.0.1
 
     ## cpu refers to both request and limit
-    cpu: 1
+    cpu: 0.5
 
     ## memory refers to both request and limit
-    memory: 1Gi
+    memory: 0.5Gi
 
   collectionManager:
     image: nexusjpl/collection-manager:0.0.2
 
     ## cpu refers to both request and limit
-    cpu: 0.5
+    cpu: 0.25
 
     ## memory refers to both request and limit
-    memory: 0.5Gi
+    memory: 0.25Gi
 
   configOperator:
     image: nexusjpl/config-operator:0.0.1
@@ -69,7 +69,7 @@ ingestion:
 
     ## path is the path on either local filesystem or NFS mount at which
     ## the granule files are stored.
-    path: /var/lib/sdap/granules
+    path: /Users/loubrieu/PycharmProjects/incubator-sdap-nexus-ingestion-manager/collection_manager/tests/resources/data
 
   ## Where to find the Collections Config file
   ## ref: https://github.com/apache/incubator-sdap-ingester/tree/dev/collection_manager#the-collections-configuration-file
