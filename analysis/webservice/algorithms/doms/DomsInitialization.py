@@ -20,6 +20,7 @@ import logging
 
 import pkg_resources
 from cassandra.cluster import Cluster
+from cassandra.auth import PlainTextAuthProvider
 from cassandra.policies import TokenAwarePolicy, DCAwareRoundRobinPolicy, WhiteListRoundRobinPolicy
 
 from webservice.NexusHandler import nexus_initializer
@@ -42,6 +43,8 @@ class DomsInitializer:
         cassDatacenter = domsconfig.get("cassandra", "local_datacenter")
         cassVersion = int(domsconfig.get("cassandra", "protocol_version"))
         cassPolicy = domsconfig.get("cassandra", "dc_policy")
+        cassUsername = domsconfig.get("cassandra", "username")
+        cassPassword = domsconfig.get("cassandra", "password")
 
         log.info("Cassandra Host(s): %s" % (cassHost))
         log.info("Cassandra Keyspace: %s" % (cassKeyspace))
@@ -55,8 +58,14 @@ class DomsInitializer:
             dc_policy = WhiteListRoundRobinPolicy([cassHost])
         token_policy = TokenAwarePolicy(dc_policy)
 
+        if cassUsername and cassPassword:
+            auth_provider = PlainTextAuthProvider(username=cassUsername, password=cassPassword)
+        else:
+            auth_provider = None
+        token_policy = TokenAwarePolicy(dc_policy)
+
         with Cluster([host for host in cassHost.split(',')], port=int(cassPort), load_balancing_policy=token_policy,
-                     protocol_version=cassVersion) as cluster:
+                     protocol_version=cassVersion, auth_provider=auth_provider) as cluster:
             session = cluster.connect()
 
             self.createKeyspace(session, cassKeyspace)
