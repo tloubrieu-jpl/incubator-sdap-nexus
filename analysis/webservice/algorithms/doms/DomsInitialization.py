@@ -62,7 +62,6 @@ class DomsInitializer:
             auth_provider = PlainTextAuthProvider(username=cassUsername, password=cassPassword)
         else:
             auth_provider = None
-        token_policy = TokenAwarePolicy(dc_policy)
 
         with Cluster([host for host in cassHost.split(',')], port=int(cassPort), load_balancing_policy=token_policy,
                      protocol_version=cassVersion, auth_provider=auth_provider) as cluster:

@@ -35,6 +35,7 @@ from webservice import Filtering as filtering
 from webservice.NexusHandler import nexus_handler
 from webservice.algorithms_spark.NexusCalcSparkHandler import NexusCalcSparkHandler
 from webservice.webmodel import NexusResults, NoDataException, NexusProcessingException
+from webservice.webmodel import MissingValueException
 
 EPOCH = timezone('UTC').localize(datetime(1970, 1, 1))
 ISO_8601 = '%Y-%m-%dT%H:%M:%S%z'
@@ -108,35 +109,20 @@ class TimeSeriesSparkHandlerImpl(NexusCalcSparkHandler):
         if next(iter([clim for clim in ds if 'CLIM' in clim]), False):
             raise NexusProcessingException(reason="Cannot compute time series on a climatology", code=400)
 
-        try:
-            bounding_polygon = request.get_bounding_polygon()
-            request.get_min_lon = lambda: bounding_polygon.bounds[0]
-            request.get_min_lat = lambda: bounding_polygon.bounds[1]
-            request.get_max_lon = lambda: bounding_polygon.bounds[2]
-            request.get_max_lat = lambda: bounding_polygon.bounds[3]
-        except:
-            try:
-                west, south, east, north = request.get_min_lon(), request.get_min_lat(), \
-                                           request.get_max_lon(), request.get_max_lat()
-                bounding_polygon = shapely.geometry.Polygon(
-                    [(west, south), (east, south), (east, north), (west, north), (west, south)])
-            except:
-                raise NexusProcessingException(
-                    reason="'b' argument is required. Must be comma-delimited float formatted as "
-                           "Minimum (Western) Longitude, Minimum (Southern) Latitude, "
-                           "Maximum (Eastern) Longitude, Maximum (Northern) Latitude",
-                    code=400)
+        west, south, east, north = request.get_bounding_box()
+        bounding_polygon = shapely.geometry.Polygon(
+            [(west, south), (east, south), (east, north), (west, north), (west, south)])
 
         try:
             start_time = request.get_start_datetime()
-        except:
+        except (ValueError, MissingValueException):
             raise NexusProcessingException(
                 reason="'startTime' argument is required. Can be int value seconds from epoch or "
                        "string format YYYY-MM-DDTHH:mm:ssZ",
                 code=400)
         try:
             end_time = request.get_end_datetime()
-        except:
+        except (ValueError, MissingValueException) :
             raise NexusProcessingException(
                 reason="'endTime' argument is required. Can be int value seconds from epoch or "
                        "string format YYYY-MM-DDTHH:mm:ssZ",

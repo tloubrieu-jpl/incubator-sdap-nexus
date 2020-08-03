@@ -66,20 +66,6 @@ class TimeAvgMapNexusSparkHandlerImpl(NexusCalcSparkHandler):
                            "Number of Spark Partitions is used by this function. Optional (Default: local,1,1)"
         }
     }
-    singleton = True
-
-    # @classmethod
-    # def instance(cls, algorithm_config=None, sc=None):
-    #     with cls.__singleton_lock:
-    #         if not cls.__singleton_instance:
-    #             try:
-    #                 singleton_instance = cls()
-    #                 singleton_instance.set_config(algorithm_config)
-    #                 singleton_instance.set_spark_context(sc)
-    #                 cls.__singleton_instance = singleton_instance
-    #             except AttributeError:
-    #                 pass
-    #     return cls.__singleton_instance
 
     def parse_arguments(self, request):
         # Parse input arguments
@@ -103,8 +89,20 @@ class TimeAvgMapNexusSparkHandlerImpl(NexusCalcSparkHandler):
         bounding_polygon = shapely.geometry.Polygon(
             [(west, south), (east, south), (east, north), (west, north), (west, south)])
 
-        start_time = request.get_start_datetime()
-        end_time = request.get_end_datetime()
+        try:
+            start_time = request.get_start_datetime()
+        except:
+            raise NexusProcessingException(
+                reason="'startTime' argument is required. Can be int value seconds from epoch or "
+                       "string format YYYY-MM-DDTHH:mm:ssZ",
+                code=400)
+        try:
+            end_time = request.get_end_datetime()
+        except:
+            raise NexusProcessingException(
+                reason="'endTime' argument is required. Can be int value seconds from epoch or "
+                       "string format YYYY-MM-DDTHH:mm:ssZ",
+                code=400)
 
         if start_time > end_time:
             raise NexusProcessingException(

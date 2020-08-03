@@ -17,3 +17,7 @@ class NoDataException(NexusProcessingException):
 class DatasetNotFoundException(NexusProcessingException):
     def __init__(self, reason="Dataset not found"):
         NexusProcessingException.__init__(self, StandardNexusErrors.DATASET_MISSING, reason, code=404)
+
+
+class MissingValueException(Exception):
+    pass
